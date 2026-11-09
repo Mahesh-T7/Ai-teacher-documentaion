@@ -759,12 +759,43 @@ export class DocumentExtractionService {
     let ocrText = '';
     let visionAnalysis = '';
 
-    try {
-      // 1. Tesseract OCR execution
-      const ocrResult = await Tesseract.recognize(buffer, 'eng');
-      ocrText = (ocrResult.data?.text || '').trim();
-    } catch (err) {
-      console.warn(`[OCR Error] Tesseract failed for ${filename}:`, err.message);
+    // Safety guard: If buffer is actually a PDF (starts with %PDF-), delegate directly to PDF extractor
+    if (
+      buffer &&
+      buffer.length >= 4 &&
+      buffer[0] === 0x25 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x44 &&
+      buffer[3] === 0x46
+    ) {
+      console.info(`[Extraction] File ${filename} detected as PDF by header bytes; routing to PDF extractor.`);
+      return await this.extractPDF(buffer, filename, fileId);
+    }
+
+    // Verify valid raster image format before passing to Tesseract
+    const isJpeg = buffer && buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const isPng = buffer && buffer.length >= 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+    const isGif = buffer && buffer.length >= 3 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+    const isBmp = buffer && buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d;
+    const isWebp = buffer && buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46;
+
+    const isValidRasterImage = isJpeg || isPng || isGif || isBmp || isWebp;
+
+    if (isValidRasterImage) {
+      try {
+        // 1. Tesseract OCR execution with safety timeout
+        const ocrPromise = Tesseract.recognize(buffer, 'eng');
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('OCR recognition timeout (15s)')), 15000)
+        );
+        const ocrResult = await Promise.race([ocrPromise, timeoutPromise]);
+        ocrText = (ocrResult.data?.text || '').trim();
+      } catch (err) {
+        console.warn(`[OCR Error] Tesseract failed for ${filename}:`, err.message);
+        ocrText = `Image file: ${filename}. (Visual educational media)`;
+      }
+    } else {
+      console.warn(`[OCR Warning] Non-raster image format or unrecognized buffer for ${filename}; skipping Tesseract OCR.`);
       ocrText = `Image file: ${filename}. (Visual educational media)`;
     }
 

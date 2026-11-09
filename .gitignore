@@ -23,6 +23,8 @@ scratch/
 temp/
 tmp/
 *.tmp
+backend/data/*.json
+!backend/data/.gitkeep
 
 # Operating System & IDE
 .DS_Store
