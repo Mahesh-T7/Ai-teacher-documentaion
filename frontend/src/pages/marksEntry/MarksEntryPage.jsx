@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   FileSpreadsheet,
@@ -199,11 +199,14 @@ export const MarksEntryPage = () => {
       if (entry.isAbsent || entry.status === 'ABSENT') return 'AB';
       if (entry.isExempted || entry.status === 'EXEMPTED') return 'EX';
       const num = Number(entry.rawMarks ?? entry.raw);
-      return isNaN(num) ? 0 : num;
+      return Number.isFinite(num) ? num : 0;
     };
 
-    const isValAbsent = (v) => v === 'AB';
-    const numOnly = (v) => (typeof v === 'number' ? v : 0);
+    const numOnly = (v) => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      const parsed = parseFloat(v);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
 
     // FA1
     const fa1_1 = getVal('FA1_ACT1');
@@ -253,18 +256,18 @@ export const MarksEntryPage = () => {
         SA1_PR_TOTAL: { rawMarks: pr_tot, finalMarks: pr_tot },
         SA1_TH_PR_80: { rawMarks: th_pr_80, finalMarks: th_pr_80 },
       },
-      fa1Total: fa1_tot,
+      fa1Total: Number.isFinite(fa1_tot) ? fa1_tot : 0,
       fa1Grade: fa1_grade,
-      fa2Total: fa2_tot,
+      fa2Total: Number.isFinite(fa2_tot) ? fa2_tot : 0,
       fa2Grade: fa2_grade,
-      faAggTotal: fa_agg,
-      ia20: ia_20,
-      th30: th_30,
-      prTotal: pr_tot,
-      thPr80: th_pr_80,
+      faAggTotal: Number.isFinite(fa_agg) ? fa_agg : 0,
+      ia20: Number.isFinite(ia_20) ? ia_20 : 0,
+      th30: Number.isFinite(th_30) ? th_30 : 0,
+      prTotal: Number.isFinite(pr_tot) ? pr_tot : 0,
+      thPr80: Number.isFinite(th_pr_80) ? th_pr_80 : 0,
       totalRaw: numOnly(fa1_1) + numOnly(fa1_2) + numOnly(fa1_test) + numOnly(fa2_1) + numOnly(fa2_2) + numOnly(fa2_test) + numOnly(th_raw) + numOnly(pr_hands) + numOnly(pr_port) + numOnly(pr_viva),
-      totalFinal: grand_tot,
-      percentage: grand_tot,
+      totalFinal: Number.isFinite(grand_tot) ? grand_tot : 0,
+      percentage: Number.isFinite(grand_tot) ? grand_tot : 0,
       grade: grand_grade,
       isPass,
       isDistinction: grand_tot >= 75,
@@ -275,23 +278,36 @@ export const MarksEntryPage = () => {
   const handleCellChange = (rowIndex, compCode, rawInput, maxAllowed) => {
     if (existingRecord?.status === 'Finalized') return;
 
-    const upper = String(rawInput || '').trim().toUpperCase();
+    const trimmed = String(rawInput ?? '').trim();
+    const upper = trimmed.toUpperCase();
     const updated = [...students];
     const student = { ...updated[rowIndex] };
     const cm = { ...(student.componentMarks || {}) };
 
     if (upper === 'AB' || upper === 'ABSENT') {
-      cm[compCode] = { rawMarks: 0, isAbsent: true, isExempted: false };
+      cm[compCode] = { rawMarks: 0, isAbsent: true, isExempted: false, isOverMax: false };
     } else if (upper === 'EX' || upper === 'EXEMPT') {
-      cm[compCode] = { rawMarks: 0, isAbsent: false, isExempted: true };
+      cm[compCode] = { rawMarks: 0, isAbsent: false, isExempted: true, isOverMax: false };
     } else {
-      const num = upper === '' ? '' : Number(upper);
-      cm[compCode] = {
-        rawMarks: num,
-        isAbsent: false,
-        isExempted: false,
-        isOverMax: num !== '' && maxAllowed && num > maxAllowed,
-      };
+      // Strip out 'nan' and non-numeric characters (allow numbers and single decimal dot)
+      const clean = trimmed.replace(/nan/gi, '').replace(/[^0-9.]/g, '');
+      if (clean === '') {
+        cm[compCode] = {
+          rawMarks: '',
+          isAbsent: false,
+          isExempted: false,
+          isOverMax: false,
+        };
+      } else {
+        const num = parseFloat(clean);
+        const validNum = Number.isFinite(num) ? num : '';
+        cm[compCode] = {
+          rawMarks: validNum,
+          isAbsent: false,
+          isExempted: false,
+          isOverMax: validNum !== '' && maxAllowed && validNum > maxAllowed,
+        };
+      }
     }
 
     student.componentMarks = cm;
@@ -359,13 +375,20 @@ export const MarksEntryPage = () => {
         if (targetC >= allKeys.length) return;
 
         const code = allKeys[targetC];
-        const upper = cellVal.trim().toUpperCase();
+        const trimmed = (cellVal || '').trim();
+        const upper = trimmed.toUpperCase();
         if (upper === 'AB') {
-          cm[code] = { rawMarks: 0, isAbsent: true };
+          cm[code] = { rawMarks: 0, isAbsent: true, isExempted: false };
         } else if (upper === 'EX') {
-          cm[code] = { rawMarks: 0, isExempted: true };
+          cm[code] = { rawMarks: 0, isExempted: true, isAbsent: false };
         } else {
-          cm[code] = { rawMarks: upper === '' ? '' : Number(upper) || 0 };
+          const clean = trimmed.replace(/nan/gi, '').replace(/[^0-9.]/g, '');
+          const num = clean === '' ? '' : parseFloat(clean);
+          cm[code] = {
+            rawMarks: Number.isFinite(num) ? num : '',
+            isAbsent: false,
+            isExempted: false,
+          };
         }
       });
 
@@ -598,11 +621,47 @@ export const MarksEntryPage = () => {
     }
   };
 
+  // Filter students based on search query
+  const filteredStudents = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return students;
+    return students.filter(
+      (s) =>
+        (s.studentName || '').toLowerCase().includes(q) ||
+        String(s.rollNumber).includes(q)
+    );
+  }, [students, searchQuery]);
+
+  // Compute Class Summary Statistics
+  const totalStudentsCount = students.length;
+  const computedList = useMemo(() => students.map(computeStudentRow), [students]);
+  const appearedStudents = useMemo(() => computedList.filter((s) => s.totalRaw > 0), [computedList]);
+  const passedStudents = useMemo(() => computedList.filter((s) => s.isPass), [computedList]);
+  const failedStudents = useMemo(() => computedList.filter((s) => s.totalRaw > 0 && !s.isPass), [computedList]);
+  const classAvg = useMemo(() => {
+    return appearedStudents.length > 0
+      ? Math.round((appearedStudents.reduce((acc, s) => acc + s.totalFinal, 0) / appearedStudents.length) * 10) / 10
+      : 0;
+  }, [appearedStudents]);
+  const passRate = useMemo(() => {
+    return appearedStudents.length > 0
+      ? Math.round((passedStudents.length / appearedStudents.length) * 1000) / 10
+      : 0;
+  }, [appearedStudents, passedStudents]);
+
+  // Grade Counts
+  const gradeCounts = useMemo(() => {
+    const counts = { 'A+': 0, A: 0, 'B+': 0, B: 0, 'C+': 0, C: 0, NA: 0 };
+    computedList.forEach((s) => {
+      if (counts[s.grade] !== undefined) counts[s.grade]++;
+    });
+    return counts;
+  }, [computedList]);
+
   // Export Landscape Register PDF
   const handleExportPdf = async () => {
     try {
       setExportingType('pdf');
-      const computedStudents = students.map(computeStudentRow);
       const liveRecord = {
         ...(existingRecord || {}),
         className,
@@ -610,9 +669,9 @@ export const MarksEntryPage = () => {
         subject,
         examTitle: existingRecord?.examTitle || `${subject} - ${className} ${section} (Class Tabulation Sheet)`,
         academicYear,
-        studentMarks: computedStudents,
+        studentMarks: computedList,
         statistics: {
-          totalStudents: computedStudents.length,
+          totalStudents: computedList.length,
           appearedCount: appearedStudents.length,
           passedCount: passedStudents.length,
           failedCount: failedStudents.length,
@@ -640,29 +699,6 @@ export const MarksEntryPage = () => {
       setExportingType(null);
     }
   };
-
-  // Filter students based on search query
-  const filteredStudents = students.filter(
-    (s) =>
-      (s.studentName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(s.rollNumber).includes(searchQuery)
-  );
-
-  // Compute Class Summary Statistics
-  const totalStudentsCount = students.length;
-  const computedList = students.map(computeStudentRow);
-  const appearedStudents = computedList.filter((s) => s.totalRaw > 0);
-  const passedStudents = computedList.filter((s) => s.isPass);
-  const failedStudents = computedList.filter((s) => s.totalRaw > 0 && !s.isPass);
-  const classAvg = appearedStudents.length > 0
-    ? Math.round((appearedStudents.reduce((acc, s) => acc + s.totalFinal, 0) / appearedStudents.length) * 10) / 10
-    : 0;
-
-  // Grade Counts
-  const gradeCounts = { 'A+': 0, A: 0, 'B+': 0, B: 0, 'C+': 0, C: 0, NA: 0 };
-  computedList.forEach((s) => {
-    if (gradeCounts[s.grade] !== undefined) gradeCounts[s.grade]++;
-  });
 
   // Ordered list of editable input keys for keyboard navigation
   const editableKeys = [
@@ -903,6 +939,10 @@ export const MarksEntryPage = () => {
             Failed: {failedStudents.length}
           </div>
 
+          <div className="flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-xl font-bold text-indigo-800 border border-indigo-200">
+            Pass Rate: {passRate}%
+          </div>
+
           <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl font-bold text-blue-900 border border-blue-200">
             Class Average: {classAvg} / 100
           </div>
@@ -1099,7 +1139,9 @@ export const MarksEntryPage = () => {
                   let val = entry.rawMarks;
                   if (entry.isAbsent) val = 'AB';
                   else if (entry.isExempted) val = 'EX';
-                  if (val === undefined || val === null) val = '';
+                  if (val === undefined || val === null || val === '' || Number.isNaN(val) || String(val) === 'NaN') {
+                    val = '';
+                  }
 
                   const isOver = entry.isOverMax;
 
@@ -1183,10 +1225,10 @@ export const MarksEntryPage = () => {
                     <td className="p-1">{renderEditableCell('FA1_ACT2', 15)}</td>
                     <td className="p-1">{renderEditableCell('FA1_TEST', 20)}</td>
                     <td className="p-1 text-center font-bold text-slate-800 bg-slate-100/70 border-x border-slate-200">
-                      {computed.fa1Total || '-'}
+                      {Number.isFinite(computed.fa1Total) ? computed.fa1Total : '-'}
                     </td>
                     <td className="p-1 text-center border-r border-slate-200 bg-slate-100/70">
-                      <span className="font-bold text-[11px] text-slate-700">{computed.fa1Grade}</span>
+                      <span className="font-bold text-[11px] text-slate-700">{computed.fa1Grade || 'NA'}</span>
                     </td>
 
                     {/* 10-14. FA2 Columns */}
@@ -1194,38 +1236,38 @@ export const MarksEntryPage = () => {
                     <td className="p-1">{renderEditableCell('FA2_ACT2', 15)}</td>
                     <td className="p-1">{renderEditableCell('FA2_TEST', 20)}</td>
                     <td className="p-1 text-center font-bold text-slate-800 bg-slate-100/70 border-x border-slate-200">
-                      {computed.fa2Total || '-'}
+                      {Number.isFinite(computed.fa2Total) ? computed.fa2Total : '-'}
                     </td>
                     <td className="p-1 text-center border-r border-slate-200 bg-slate-100/70">
-                      <span className="font-bold text-[11px] text-slate-700">{computed.fa2Grade}</span>
+                      <span className="font-bold text-[11px] text-slate-700">{computed.fa2Grade || 'NA'}</span>
                     </td>
 
                     {/* 15-16. FA1+FA2 & IA 20% */}
                     <td className="p-1 text-center font-bold text-slate-700 bg-slate-100/70">
-                      {computed.faAggTotal || '-'}
+                      {Number.isFinite(computed.faAggTotal) ? computed.faAggTotal : '-'}
                     </td>
                     <td className="p-1 text-center font-black text-amber-900 bg-amber-50/60 border-r border-slate-200">
-                      {computed.ia20 || '-'}
+                      {Number.isFinite(computed.ia20) ? computed.ia20 : '-'}
                     </td>
 
                     {/* 17-23. SA1 Theory & Practical */}
                     <td className="p-1">{renderEditableCell('SA1_TH_RAW', 60)}</td>
                     <td className="p-1 text-center font-bold text-blue-900 bg-blue-50/50">
-                      {computed.th30 || '-'}
+                      {Number.isFinite(computed.th30) ? computed.th30 : '-'}
                     </td>
                     <td className="p-1">{renderEditableCell('SA1_PR_HANDS', 30)}</td>
                     <td className="p-1">{renderEditableCell('SA1_PR_PORT', 10)}</td>
                     <td className="p-1">{renderEditableCell('SA1_PR_VIVA', 10)}</td>
                     <td className="p-1 text-center font-bold text-slate-800 bg-slate-100/70">
-                      {computed.prTotal || '-'}
+                      {Number.isFinite(computed.prTotal) ? computed.prTotal : '-'}
                     </td>
                     <td className="p-1 text-center font-bold text-slate-700 bg-slate-100/70 border-r border-slate-200">
-                      {computed.thPr80 || '-'}
+                      {Number.isFinite(computed.thPr80) ? computed.thPr80 : '-'}
                     </td>
 
                     {/* 24-26. Grand Total, Grade & Result */}
                     <td className="p-1 text-center font-black text-sm text-blue-700 bg-blue-100/50 border-r border-blue-200">
-                      {computed.totalFinal}
+                      {Number.isFinite(computed.totalFinal) ? computed.totalFinal : 0}
                     </td>
                     <td className="p-1 text-center font-black">
                       <span
