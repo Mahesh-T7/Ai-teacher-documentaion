@@ -126,23 +126,15 @@ export const Register = () => {
 
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 p-6 md:p-8">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+          <div className="mb-6 pb-4 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 Institutional Details
               </h2>
               <p className="text-xs text-slate-500">
-                All data is encrypted and securely stored for multi-school architectures.
+                All data is encrypted and securely stored for official school documentation.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handlePreFill}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Fill Sample</span>
-            </button>
           </div>
 
           {error && (

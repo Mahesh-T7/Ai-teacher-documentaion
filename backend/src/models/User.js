@@ -1,9 +1,16 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { getDBStatus } from '../config/db.js';
+import { loadCollection, saveCollection } from '../utils/localDiskStore.js';
 
-// In-memory fallback collection for offline/development if MongoDB is unavailable
+// In-memory + persistent fallback collection for offline/development
+const initialUsers = loadCollection('users', []);
 const memoryUsers = new Map();
+initialUsers.forEach((u) => memoryUsers.set(u._id || u.id, u));
+
+const persistUsers = () => {
+  saveCollection('users', Array.from(memoryUsers.values()));
+};
 
 const userSchema = new mongoose.Schema(
   {
@@ -158,6 +165,7 @@ export class User {
     };
 
     memoryUsers.set(id, newUser);
+    persistUsers();
     const safeUser = { ...newUser };
     delete safeUser.password;
     return safeUser;
@@ -261,6 +269,7 @@ export class User {
       updatedAt: new Date(),
     };
     memoryUsers.set(id, merged);
+    persistUsers();
 
     const safeObj = { ...merged };
     delete safeObj.password;

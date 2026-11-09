@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import { getDBStatus } from '../config/db.js';
 import { calculateStudentMarksResult, calculateExamStatistics } from '../utils/marksCalculationEngine.js';
+import { loadCollection, saveCollection } from '../utils/localDiskStore.js';
 
-const memoryExamRecords = [];
+const memoryExamRecords = loadCollection('examRecords', []);
+const persistExamRecords = () => saveCollection('examRecords', memoryExamRecords);
 
 const examRecordSchema = new mongoose.Schema(
   {
@@ -159,6 +161,7 @@ export class ExamRecord {
       updatedAt: new Date(),
     };
     memoryExamRecords.push(item);
+    persistExamRecords();
     return item;
   }
 
@@ -275,6 +278,7 @@ export class ExamRecord {
       auditHistory: [...currentAudit, auditEntry],
     };
     memoryExamRecords[idx] = merged;
+    persistExamRecords();
     return merged;
   }
 
@@ -301,6 +305,7 @@ export class ExamRecord {
     );
     if (idx === -1) return false;
     memoryExamRecords.splice(idx, 1);
+    persistExamRecords();
     return true;
   }
 }

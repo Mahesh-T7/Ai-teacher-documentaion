@@ -146,18 +146,6 @@ export const Login = () => {
             </button>
           </form>
 
-          {/* Quick Demo Pre-fill */}
-          <div className="mt-5 pt-5 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleQuickDemo}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100/80 rounded-xl border border-indigo-200/60 transition"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Fill Demo Credentials (Quick Test)</span>
-            </button>
-          </div>
-
           {/* Footer Navigation */}
           <div className="mt-6 text-center text-xs text-slate-500">
             Don't have a teacher account yet?{' '}

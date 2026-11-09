@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import { getDBStatus } from '../config/db.js';
+import { loadCollection, saveCollection } from '../utils/localDiskStore.js';
 
-const memoryPlans = [];
+const memoryPlans = loadCollection('lessonPlans', []);
+const persistPlans = () => saveCollection('lessonPlans', memoryPlans);
 
 const lessonPlanSchema = new mongoose.Schema(
   {
@@ -196,6 +198,7 @@ export class LessonPlan {
       updatedAt: new Date(),
     };
     memoryPlans.push(item);
+    persistPlans();
     return item;
   }
 
@@ -312,6 +315,7 @@ export class LessonPlan {
       updatedAt: new Date(),
     };
     memoryPlans[index] = merged;
+    persistPlans();
     return merged;
   }
 
@@ -331,6 +335,7 @@ export class LessonPlan {
     );
     if (index === -1) return false;
     memoryPlans.splice(index, 1);
+    persistPlans();
     return true;
   }
 

@@ -57,7 +57,7 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     database: {
       connected: dbStatus.isConnected,
-      mode: dbStatus.isMemoryFallback ? 'local_fallback' : 'mongodb_atlas_or_local',
+      mode: dbStatus.mode || (dbStatus.isConnected ? 'mongodb_atlas' : 'persistent_local_store'),
     },
     storage: storage.getStorageStatus(),
   });

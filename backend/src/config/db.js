@@ -13,9 +13,8 @@ export const connectDB = async () => {
     return conn;
   } catch (err) {
     console.warn(`[MongoDB Warning] Could not connect to MongoDB at "${uri}": ${err.message}`);
-    console.info(`[MongoDB Info] Note: To use MongoDB Atlas, set your MONGODB_URI in backend/.env:`);
-    console.info(`[MongoDB Info] MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/teacher_portal?retryWrites=true&w=majority`);
-    console.log(`[Database System] Active storage mode: Local fallback store (Development/Test Mode).`);
+    console.info(`[MongoDB Info] Note: To connect MongoDB Atlas, ensure your IP is whitelisted under Network Access in Atlas.`);
+    console.log(`[Database System] Active storage mode: Persistent Local Store (Disk Synchronized). All data is saved permanently.`);
     return null;
   }
 };
@@ -25,6 +24,7 @@ export const getDBStatus = () => {
   return {
     isConnected: isConn,
     isMemoryFallback: !isConn,
+    mode: isConn ? 'mongodb_atlas' : 'persistent_local_store',
     uri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/teacher_portal',
   };
 };

@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import { getDBStatus } from '../config/db.js';
+import { loadCollection, saveCollection } from '../utils/localDiskStore.js';
 
-const memoryDiary = [];
+const memoryDiary = loadCollection('dailyEntries', []);
+const persistDailyEntries = () => saveCollection('dailyEntries', memoryDiary);
 
 const dailyTeachingEntrySchema = new mongoose.Schema(
   {
@@ -286,6 +288,7 @@ export class DailyTeachingEntry {
       updatedAt: new Date(),
     };
     memoryDiary.push(item);
+    persistDailyEntries();
     return item;
   }
 
@@ -426,6 +429,7 @@ export class DailyTeachingEntry {
       updatedAt: new Date(),
     };
     memoryDiary[index] = merged;
+    persistDailyEntries();
     return merged;
   }
 
@@ -446,6 +450,7 @@ export class DailyTeachingEntry {
     );
     if (index === -1) return false;
     memoryDiary.splice(index, 1);
+    persistDailyEntries();
     return true;
   }
 
