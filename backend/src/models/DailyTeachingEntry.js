@@ -241,7 +241,7 @@ dailyTeachingEntrySchema.index({ teacherId: 1, className: 1 });
 dailyTeachingEntrySchema.index({ teacherId: 1, subject: 1 });
 dailyTeachingEntrySchema.index({ teacherId: 1, date: 1, period: 1 });
 
-dailyTeachingEntrySchema.pre('save', function (next) {
+dailyTeachingEntrySchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
@@ -251,7 +251,6 @@ dailyTeachingEntrySchema.pre('save', function (next) {
   if (this.status === 'Completed' && !this.completedAt) {
     this.completedAt = new Date();
   }
-  next();
 });
 
 const MongoDailyTeachingEntry = mongoose.model('DailyTeachingEntry', dailyTeachingEntrySchema);
@@ -272,12 +271,11 @@ export class DailyTeachingEntry {
       payload.completedAt = new Date();
     }
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(payload.teacherId)) {
       try {
         return await MongoDailyTeachingEntry.create(payload);
       } catch (err) {
-        console.warn('[DB Error] DailyTeachingEntry.create fallback:', err.message);
-        throw err;
+        console.warn('[DB Error] DailyTeachingEntry.create fallback to disk store:', err.message);
       }
     }
 

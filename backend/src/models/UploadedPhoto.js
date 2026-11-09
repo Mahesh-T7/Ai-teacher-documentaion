@@ -179,7 +179,7 @@ export class UploadedPhoto {
 
   static async findById(id) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id)) {
       try {
         return await MongoUploadedPhoto.findById(id);
       } catch (err) {
@@ -191,7 +191,7 @@ export class UploadedPhoto {
 
   static async updateById(id, teacherId, updateData) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id)) {
       try {
         return await MongoUploadedPhoto.findOneAndUpdate(
           { _id: id, teacherId },
@@ -213,7 +213,7 @@ export class UploadedPhoto {
 
   static async deleteById(id, teacherId) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id)) {
       try {
         const res = await MongoUploadedPhoto.findOneAndDelete({ _id: id, teacherId });
         return !!res;

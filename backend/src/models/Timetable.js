@@ -83,14 +83,13 @@ const timetableSchema = new mongoose.Schema(
 );
 
 // Pre-save to auto-fill timeSlot and classHandled if not explicitly set
-timetableSchema.pre('save', function (next) {
+timetableSchema.pre('save', function () {
   if (!this.timeSlot && this.startTime && this.endTime) {
     this.timeSlot = `${this.startTime} - ${this.endTime}`;
   }
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
-  next();
 });
 
 // Compound unique index to prevent accidental duplicate periods for the same teacher, weekday and academic year

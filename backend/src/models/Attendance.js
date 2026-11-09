@@ -90,7 +90,7 @@ const attendanceSchema = new mongoose.Schema(
 
 attendanceSchema.index({ teacherId: 1, date: 1, className: 1, section: 1 }, { unique: true });
 
-attendanceSchema.pre('save', function (next) {
+attendanceSchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
@@ -104,7 +104,6 @@ attendanceSchema.pre('save', function (next) {
   this.absentCount = absent;
   this.leaveCount = leave;
   this.attendancePercentage = total > 0 ? Math.round((present / total) * 100) : 0;
-  next();
 });
 
 const MongoAttendance = mongoose.model('Attendance', attendanceSchema);

@@ -91,11 +91,10 @@ const practicalActivitySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-practicalActivitySchema.pre('save', function (next) {
+practicalActivitySchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
-  next();
 });
 
 const MongoPractical = mongoose.model('PracticalActivity', practicalActivitySchema);

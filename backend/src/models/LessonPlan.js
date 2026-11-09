@@ -158,14 +158,13 @@ lessonPlanSchema.index({ teacherId: 1, status: 1 });
 lessonPlanSchema.index({ teacherId: 1, subject: 1 });
 lessonPlanSchema.index({ teacherId: 1, className: 1 });
 
-lessonPlanSchema.pre('save', function (next) {
+lessonPlanSchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
   if (!this.unitOrChapter) {
     this.unitOrChapter = this.unit || this.chapter || '';
   }
-  next();
 });
 
 const MongoLessonPlan = mongoose.model('LessonPlan', lessonPlanSchema);
@@ -182,12 +181,11 @@ export class LessonPlan {
       status: data.status || 'Draft',
     };
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(payload.teacherId)) {
       try {
         return await MongoLessonPlan.create(payload);
       } catch (err) {
-        console.warn('[DB Error] LessonPlan.create fallback:', err.message);
-        throw err;
+        console.warn('[DB Error] LessonPlan.create fallback to disk store:', err.message);
       }
     }
 

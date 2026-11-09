@@ -61,11 +61,10 @@ const studentSchema = new mongoose.Schema(
 
 studentSchema.index({ teacherId: 1, className: 1, section: 1, rollNumber: 1 }, { unique: true });
 
-studentSchema.pre('save', function (next) {
+studentSchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
-  next();
 });
 
 const MongoStudent = mongoose.model('Student', studentSchema);

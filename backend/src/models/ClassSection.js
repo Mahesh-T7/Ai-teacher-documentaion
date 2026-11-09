@@ -44,11 +44,10 @@ const classSectionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-classSectionSchema.pre('save', function (next) {
+classSectionSchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
-  next();
 });
 
 const MongoClassSection = mongoose.model('ClassSection', classSectionSchema);

@@ -207,8 +207,9 @@ export const getPhotoById = async (req, res) => {
  */
 export const updatePhoto = async (req, res) => {
   try {
+    const teacherId = req.user._id || req.user.id;
     const existing = await UploadedPhoto.findById(req.params.id);
-    if (!existing || String(existing.teacherId) !== String(req.user._id)) {
+    if (!existing || String(existing.teacherId) !== String(teacherId)) {
       return res.status(404).json({ success: false, message: 'Photo not found or unauthorized.' });
     }
 
@@ -224,7 +225,7 @@ export const updatePhoto = async (req, res) => {
     if (teachingEntryId !== undefined) updateData.teachingEntryId = teachingEntryId || null;
     if (date !== undefined) updateData.date = new Date(date);
 
-    const updated = await UploadedPhoto.updateById(req.params.id, req.user._id, updateData);
+    const updated = await UploadedPhoto.updateById(req.params.id, teacherId, updateData);
 
     res.status(200).json({
       success: true,

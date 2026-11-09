@@ -111,7 +111,7 @@ const assessmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-assessmentSchema.pre('save', function (next) {
+assessmentSchema.pre('save', function () {
   if (!this.classHandled) {
     this.classHandled = this.section ? `${this.className}-${this.section}` : this.className;
   }
@@ -135,7 +135,6 @@ assessmentSchema.pre('save', function (next) {
     this.highestMarks = highest === -Infinity ? 0 : highest;
     this.lowestMarks = lowest === Infinity ? 0 : lowest;
   }
-  next();
 });
 
 const MongoAssessment = mongoose.model('Assessment', assessmentSchema);
