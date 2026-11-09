@@ -154,12 +154,22 @@ export const MarksEntryPage = () => {
         academicYear,
       });
 
-      const records = res.data?.data || [];
+      const records = Array.isArray(res?.data)
+        ? res.data
+        : (Array.isArray(res) ? res : (res?.data?.data || []));
+
       if (records.length > 0) {
-        const record = records[0];
+        // Prioritize the record with the most authentic student entries and latest updated
+        const sorted = [...records].sort((a, b) => {
+          const aCount = a.studentMarks?.length || 0;
+          const bCount = b.studentMarks?.length || 0;
+          if (aCount !== bCount) return bCount - aCount;
+          return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+        });
+        const record = sorted[0];
         setExistingRecord(record);
         if (record.studentMarks && record.studentMarks.length > 0) {
-          setStudents(record.studentMarks);
+          setStudents(record.studentMarks.map(computeStudentRow));
         }
       } else {
         setExistingRecord(null);
@@ -319,9 +329,13 @@ export const MarksEntryPage = () => {
   // Student field (Name, Roll, Gender, Caste) edit
   const handleStudentFieldChange = (rowIndex, field, val) => {
     if (existingRecord?.status === 'Finalized') return;
-    const updated = [...students];
-    updated[rowIndex] = { ...updated[rowIndex], [field]: val };
-    setStudents(updated);
+    setStudents((prev) => {
+      const updated = [...prev];
+      if (updated[rowIndex]) {
+        updated[rowIndex] = { ...updated[rowIndex], [field]: val };
+      }
+      return updated;
+    });
     setIsDirty(true);
   };
 
@@ -513,9 +527,14 @@ export const MarksEntryPage = () => {
       const computedStudents = students.map(computeStudentRow);
 
       if (existingRecord && existingRecord._id) {
-        await examApi.updateExamRecord(existingRecord._id, {
+        const updateRes = await examApi.updateExamRecord(existingRecord._id, {
           studentMarks: computedStudents,
         });
+        const saved = updateRes?.data?.data || updateRes?.data || updateRes;
+        setExistingRecord(saved);
+        if (saved?.studentMarks && saved.studentMarks.length > 0) {
+          setStudents(saved.studentMarks.map(computeStudentRow));
+        }
         showToast('Marks draft updated successfully!', 'success');
       } else {
         const res = await examApi.createExamRecord({
@@ -527,7 +546,11 @@ export const MarksEntryPage = () => {
           subject,
           initialStudents: computedStudents,
         });
-        setExistingRecord(res.data?.data || res.data);
+        const saved = res?.data?.data || res?.data || res;
+        setExistingRecord(saved);
+        if (saved?.studentMarks && saved.studentMarks.length > 0) {
+          setStudents(saved.studentMarks.map(computeStudentRow));
+        }
         showToast('Marks record initialized and saved!', 'success');
       }
       setIsDirty(false);
@@ -555,13 +578,21 @@ export const MarksEntryPage = () => {
           subject,
           initialStudents: computedStudents,
         });
-        recordId = (res.data?.data || res.data)._id;
+        const saved = res?.data?.data || res?.data || res;
+        recordId = saved?._id;
+        setExistingRecord(saved);
       } else {
-        await examApi.updateExamRecord(recordId, { studentMarks: computedStudents });
+        const updateRes = await examApi.updateExamRecord(recordId, { studentMarks: computedStudents });
+        const saved = updateRes?.data?.data || updateRes?.data || updateRes;
+        setExistingRecord(saved);
       }
 
       const finRes = await examApi.finalizeExamRecord(recordId);
-      setExistingRecord(finRes.data?.data || finRes.data);
+      const finalized = finRes?.data?.data || finRes?.data || finRes;
+      setExistingRecord(finalized);
+      if (finalized?.studentMarks && finalized.studentMarks.length > 0) {
+        setStudents(finalized.studentMarks.map(computeStudentRow));
+      }
       showToast('Examination marks officially finalized and locked!', 'success');
       setConfirmFinalizeOpen(false);
       setIsDirty(false);
@@ -1131,6 +1162,10 @@ export const MarksEntryPage = () => {
               </tr>
             ) : (
               filteredStudents.map((stu, rIdx) => {
+                const realIdx = students.findIndex(
+                  (s) => (stu.studentId && s.studentId === stu.studentId) || s.rollNumber === stu.rollNumber
+                );
+                const targetIdx = realIdx >= 0 ? realIdx : rIdx;
                 const computed = computeStudentRow(stu);
                 const cm = stu.componentMarks || {};
 
@@ -1147,13 +1182,13 @@ export const MarksEntryPage = () => {
 
                   return (
                     <input
-                      ref={(el) => (cellRefs.current[`${rIdx}_${compCode}`] = el)}
+                      ref={(el) => (cellRefs.current[`${targetIdx}_${compCode}`] = el)}
                       type="text"
                       disabled={existingRecord?.status === 'Finalized'}
                       value={val}
-                      onChange={(e) => handleCellChange(rIdx, compCode, e.target.value, maxAllowed)}
-                      onKeyDown={(e) => handleKeyDown(e, rIdx, compCode, editableKeys)}
-                      onPaste={(e) => handlePaste(e, rIdx, compCode, editableKeys)}
+                      onChange={(e) => handleCellChange(targetIdx, compCode, e.target.value, maxAllowed)}
+                      onKeyDown={(e) => handleKeyDown(e, targetIdx, compCode, editableKeys)}
+                      onPaste={(e) => handlePaste(e, targetIdx, compCode, editableKeys)}
                       placeholder="-"
                       className={`w-full h-8 text-center font-bold text-xs rounded border transition ${
                         entry.isAbsent
@@ -1171,7 +1206,7 @@ export const MarksEntryPage = () => {
 
                 return (
                   <tr
-                    key={stu.studentId || rIdx}
+                    key={stu.studentId || targetIdx}
                     className={`hover:bg-blue-50/40 transition-colors ${
                       rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'
                     }`}
@@ -1187,7 +1222,7 @@ export const MarksEntryPage = () => {
                         type="text"
                         disabled={existingRecord?.status === 'Finalized'}
                         value={stu.studentName}
-                        onChange={(e) => handleStudentFieldChange(rIdx, 'studentName', e.target.value)}
+                        onChange={(e) => handleStudentFieldChange(targetIdx, 'studentName', e.target.value)}
                         className="w-full font-bold text-xs text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:outline-none px-1"
                       />
                     </td>
@@ -1197,7 +1232,7 @@ export const MarksEntryPage = () => {
                       <select
                         disabled={existingRecord?.status === 'Finalized'}
                         value={stu.gender || 'M'}
-                        onChange={(e) => handleStudentFieldChange(rIdx, 'gender', e.target.value)}
+                        onChange={(e) => handleStudentFieldChange(targetIdx, 'gender', e.target.value)}
                         className="bg-transparent text-[11px] font-bold text-slate-600 focus:outline-none cursor-pointer"
                       >
                         <option value="M">M</option>
@@ -1210,7 +1245,7 @@ export const MarksEntryPage = () => {
                       <select
                         disabled={existingRecord?.status === 'Finalized'}
                         value={stu.caste || 'GEN'}
-                        onChange={(e) => handleStudentFieldChange(rIdx, 'caste', e.target.value)}
+                        onChange={(e) => handleStudentFieldChange(targetIdx, 'caste', e.target.value)}
                         className="bg-transparent text-[10px] font-bold text-slate-600 focus:outline-none cursor-pointer"
                       >
                         <option value="GEN">GEN</option>
@@ -1312,7 +1347,7 @@ export const MarksEntryPage = () => {
                     {existingRecord?.status !== 'Finalized' && (
                       <td className="p-1 text-center">
                         <button
-                          onClick={() => handleDeleteRow(rIdx)}
+                          onClick={() => handleDeleteRow(targetIdx)}
                           className="p-1 text-slate-300 hover:text-rose-600 rounded transition cursor-pointer"
                           title="Delete row"
                         >

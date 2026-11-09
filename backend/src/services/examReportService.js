@@ -397,7 +397,8 @@ export async function generateClassRegisterExcel({ examRecord, teacherInfo = {} 
     gradeSheet.addRow([grade, count]);
   });
 
-  return await workbook.xlsx.writeBuffer();
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 /**
@@ -868,5 +869,6 @@ export async function generateAiNsqfExcelWorkbook({ examRecord, teacherInfo = {}
   ];
   gradeRows.forEach((r) => gradeSheet.addRow(r));
 
-  return await workbook.xlsx.writeBuffer();
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }

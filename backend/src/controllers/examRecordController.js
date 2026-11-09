@@ -341,10 +341,12 @@ export const exportClassRegisterExcel = async (req, res, next) => {
 
     const excelBuffer = await generateClassRegisterExcel({ examRecord: record, teacherInfo });
     const fileName = `Class_Register_${sanitizeFileName(record.examTitle)}_${record.className}.xlsx`;
+    const finalBuffer = Buffer.isBuffer(excelBuffer) ? excelBuffer : Buffer.from(excelBuffer);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send(excelBuffer);
+    res.setHeader('Content-Length', finalBuffer.length);
+    res.end(finalBuffer);
   } catch (error) {
     next(error);
   }
@@ -427,10 +429,12 @@ export const exportNsqfExcelFormat = async (req, res, next) => {
 
     const excelBuffer = await generateAiNsqfExcelWorkbook({ examRecord: record, teacherInfo });
     const fileName = `AI_NSQF_Marks_Entry_${sanitizeFileName(record.className)}_${record.section || 'A'}.xlsx`;
+    const finalBuffer = Buffer.isBuffer(excelBuffer) ? excelBuffer : Buffer.from(excelBuffer);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send(excelBuffer);
+    res.setHeader('Content-Length', finalBuffer.length);
+    res.end(finalBuffer);
   } catch (error) {
     next(error);
   }
@@ -474,9 +478,11 @@ export const downloadExcelFormatTemplate = async (req, res, next) => {
       },
     });
 
+    const finalBuffer = Buffer.isBuffer(excelBuffer) ? excelBuffer : Buffer.from(excelBuffer);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="AI_NSQF_Marks_Entry_Template.xlsx"`);
-    res.send(excelBuffer);
+    res.setHeader('Content-Length', finalBuffer.length);
+    res.end(finalBuffer);
   } catch (error) {
     next(error);
   }
@@ -584,26 +590,38 @@ export const importExcelMarks = async (req, res, next) => {
       });
     }
 
-    const isZip =
+    const workbook = new ExcelJS.Workbook();
+    let loadSucceeded = false;
+
+    // Check if buffer starts with standard ZIP signature PK (0x50, 0x4B)
+    const isZipSignature =
       req.file.buffer.length >= 4 &&
       req.file.buffer[0] === 0x50 &&
       req.file.buffer[1] === 0x4b;
 
-    if (!isZip) {
-      return res.status(400).json({
-        success: false,
-        message: 'The uploaded file is not a valid Microsoft Excel (.xlsx) workbook. If this is an older .xls, CSV, or HTML table, please open and re-save it as .xlsx before uploading.',
-      });
+    if (isZipSignature) {
+      try {
+        await workbook.xlsx.load(req.file.buffer);
+        loadSucceeded = true;
+      } catch (excelJsErr) {
+        // Fall back to SheetJS to repair or read alternative zip encodings
+      }
     }
 
-    const workbook = new ExcelJS.Workbook();
-    try {
-      await workbook.xlsx.load(req.file.buffer);
-    } catch (parseErr) {
-      return res.status(400).json({
-        success: false,
-        message: `Unable to parse Excel workbook: ${parseErr.message || 'File archive corrupted'}. Please ensure it is a valid .xlsx file.`,
-      });
+    // Universal Fallback: If not standard zip or if ExcelJS encountered archive/central directory issues,
+    // read with SheetJS (supports .xlsx, .xls, .csv, html tables) and convert to clean standard .xlsx
+    if (!loadSucceeded) {
+      try {
+        const sheetJsWb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true, raw: false });
+        const cleanXlsxBuffer = XLSX.write(sheetJsWb, { type: 'buffer', bookType: 'xlsx' });
+        await workbook.xlsx.load(cleanXlsxBuffer);
+        loadSucceeded = true;
+      } catch (sheetJsErr) {
+        return res.status(400).json({
+          success: false,
+          message: `Unable to parse Excel workbook: ${sheetJsErr.message || 'File archive corrupted'}. Please ensure it is a valid .xlsx, .xls, or .csv file.`,
+        });
+      }
     }
 
     // Filter out non-data sheets (readme, grade ref, instructions, consolidated summaries)

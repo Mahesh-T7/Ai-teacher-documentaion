@@ -80,6 +80,9 @@ const examRecordSchema = new mongoose.Schema(
         studentName: { type: String, required: true },
         admissionNumber: { type: String, default: '' },
         rollNumber: { type: Number, required: true },
+        gender: { type: String, default: 'M' },
+        caste: { type: String, default: 'GEN' },
+        fatherName: { type: String, default: '' },
         componentMarks: { type: mongoose.Schema.Types.Mixed, default: {} },
         totalRaw: { type: Number, default: 0 },
         totalFinal: { type: Number, default: 0 },
@@ -167,7 +170,7 @@ export class ExamRecord {
 
   static async findById(id) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id)) {
       try {
         return await MongoExamRecord.findById(id);
       } catch (err) {
@@ -189,7 +192,7 @@ export class ExamRecord {
 
     if (isConnected) {
       try {
-        return await MongoExamRecord.find(query).sort({ examDate: -1, createdAt: -1 });
+        return await MongoExamRecord.find(query).sort({ updatedAt: -1, createdAt: -1 });
       } catch (err) {
         console.warn('[DB Error] ExamRecord.findForTeacher fallback:', err.message);
       }
@@ -205,7 +208,7 @@ export class ExamRecord {
         if (filters.academicYear && r.academicYear !== filters.academicYear) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.examDate || b.createdAt) - new Date(a.examDate || a.createdAt));
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
   }
 
   static async updateById(id, teacherId, updateData, userEmail = '') {
@@ -259,7 +262,7 @@ export class ExamRecord {
             $set: payload,
             $push: { auditHistory: auditEntry },
           },
-          { new: true }
+          { returnDocument: 'after' }
         );
       } catch (err) {
         console.warn('[DB Error] ExamRecord.updateById fallback:', err.message);

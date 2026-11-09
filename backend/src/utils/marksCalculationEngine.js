@@ -582,10 +582,14 @@ export function calculateStudentMarksResult(studentEntry, template) {
   });
 
   return {
+    ...studentEntry,
     studentId: studentEntry.studentId || null,
     studentName: studentEntry.studentName || 'Student',
     admissionNumber: studentEntry.admissionNumber || '',
     rollNumber: studentEntry.rollNumber || 1,
+    gender: studentEntry.gender || 'M',
+    caste: studentEntry.caste || 'GEN',
+    fatherName: studentEntry.fatherName || '',
     componentMarks: computedComponentDetails,
     totalRaw: applyRounding(totalRawMarks, roundingRule),
     totalFinal: totalFinalMarks,

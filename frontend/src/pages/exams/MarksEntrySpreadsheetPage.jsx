@@ -257,8 +257,10 @@ export const MarksEntrySpreadsheetPage = () => {
       });
       if (res.data?.success || res.success) {
         showToast('Draft marks saved successfully!', 'success');
-        if (res.data?.data) {
-          setExamRecord(res.data.data);
+        const updatedRec = res.data?.data || res.data || res;
+        if (updatedRec) {
+          setExamRecord(updatedRec);
+          if (updatedRec.studentMarks) setStudents(updatedRec.studentMarks);
         }
       }
     } catch (err) {

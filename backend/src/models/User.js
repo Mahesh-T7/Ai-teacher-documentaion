@@ -251,7 +251,7 @@ export class User {
     if (!isMemoryFallback && mongoose.Types.ObjectId.isValid(id)) {
       try {
         const updated = await MongoUser.findByIdAndUpdate(id, cleanUpdate, {
-          new: true,
+          returnDocument: 'after',
           runValidators: true,
         }).select('-password');
         return updated;
