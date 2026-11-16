@@ -11,10 +11,11 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    const server = app.listen(PORT, () => {
+    const HOST = process.env.HOST || '0.0.0.0';
+    const server = app.listen(PORT, HOST, () => {
       console.log(`=======================================================`);
       console.log(` 🚀 Teacher Documentation Portal API is running!`);
-      console.log(` 📍 Port: ${PORT}`);
+      console.log(` 📍 Address: http://${HOST}:${PORT}`);
       console.log(` 🌐 Health: http://localhost:${PORT}/api/health`);
       console.log(` 🛡️  Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`=======================================================`);
