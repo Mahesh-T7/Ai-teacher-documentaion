@@ -31,10 +31,11 @@ export const configureCors = () => {
         return callback(null, true);
       }
 
-      // Check trusted hosting patterns (Vercel, Render, Railway)
+      // Check trusted hosting patterns (GitHub Pages, Vercel, Render, Railway)
       try {
         const hostname = new URL(origin).hostname;
         if (
+          hostname.endsWith('.github.io') ||
           hostname.endsWith('.vercel.app') ||
           hostname.endsWith('.onrender.com') ||
           hostname.endsWith('.railway.app') ||
