@@ -52,8 +52,10 @@ axiosClient.interceptors.response.use(
     if (res && res.status === 401) {
       localStorage.removeItem('teacher_token');
       localStorage.removeItem('teacher_user');
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        window.location.href = '/login?expired=1';
+      const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+      const loginUrl = `${basePath}/login?expired=1`;
+      if (!window.location.pathname.endsWith('/login') && !window.location.pathname.endsWith('/register')) {
+        window.location.href = loginUrl;
       }
     }
 
