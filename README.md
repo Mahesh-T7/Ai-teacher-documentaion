@@ -1,5 +1,8 @@
 # AI Teacher Documentation Management Portal
 
+[![Deploy Frontend to GitHub Pages](https://github.com/Mahesh-T7/Ai-teacher-documentaion/actions/workflows/deploy.yml/badge.svg)](https://github.com/Mahesh-T7/Ai-teacher-documentaion/actions/workflows/deploy.yml)
+[![Live Site](https://img.shields.io/badge/Live_Site-GitHub_Pages-2563eb?style=flat&logo=github)](https://Mahesh-T7.github.io/Ai-teacher-documentaion/)
+
 A secure, modern web application designed for school teachers to maintain daily teaching diaries, lesson plans, classroom photographs, student attendance, practical activities, assessments, syllabus progress, and official inspection documentation.
 
 ---
