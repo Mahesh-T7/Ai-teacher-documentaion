@@ -178,13 +178,13 @@ export class User {
     if (!isMemoryFallback) {
       try {
         const user = await MongoUser.findOne({ email: normalizedEmail }).select('+password');
-        return user;
+        if (user) return user;
       } catch (err) {
         console.warn('[DB Error] Falling back to local store for findByEmail:', err.message);
       }
     }
 
-    // Memory lookup
+    // Memory / localDiskStore lookup (also covers accounts created while offline)
     for (const u of memoryUsers.values()) {
       if (u.email.toLowerCase() === normalizedEmail) {
         return {
@@ -213,8 +213,8 @@ export class User {
       }
     }
 
-    // Memory lookup
-    const user = memoryUsers.get(id);
+    // Memory / localDiskStore lookup
+    const user = memoryUsers.get(String(id));
     if (!user) return null;
     const safeUser = { ...user };
     delete safeUser.password;
@@ -254,13 +254,13 @@ export class User {
           returnDocument: 'after',
           runValidators: true,
         }).select('-password');
-        return updated;
+        if (updated) return updated;
       } catch (err) {
         console.warn('[DB Error] Falling back to local store for updateById:', err.message);
       }
     }
 
-    const existing = memoryUsers.get(id);
+    const existing = memoryUsers.get(String(id));
     if (!existing) return null;
 
     const merged = {
@@ -268,7 +268,7 @@ export class User {
       ...cleanUpdate,
       updatedAt: new Date(),
     };
-    memoryUsers.set(id, merged);
+    memoryUsers.set(String(id), merged);
     persistUsers();
 
     const safeObj = { ...merged };

@@ -28,6 +28,8 @@ export const examApi = {
     axiosClient.get(`/exams/records/${id}/export/excel`, { responseType: 'blob' }),
   downloadNsqfExcelFormat: (id) =>
     axiosClient.get(`/exams/records/${id}/export/nsqf-excel`, { responseType: 'blob' }),
+  downloadNormalExcelFormat: (id) =>
+    axiosClient.get(`/exams/records/${id}/export/normal-excel`, { responseType: 'blob' }),
   downloadExcelFormatTemplate: (params = {}) =>
     axiosClient.get('/exams/template-excel', { params, responseType: 'blob' }),
   downloadStudentReportCardPdf: (id, studentId) =>
@@ -35,7 +37,7 @@ export const examApi = {
   downloadBulkReportCardsPdf: (id) =>
     axiosClient.get(`/exams/records/${id}/export/bulk-report-cards`, { responseType: 'blob' }),
 
-  // Excel Upload Import
+  // Excel Upload Import & Roster Sync
   importExcelMarks: (formData) =>
     axiosClient.post('/exams/import-excel', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -44,6 +46,7 @@ export const examApi = {
     axiosClient.post('/exams/import-students-excel', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  syncStudents: (data) => axiosClient.post('/exams/sync-students', data),
 };
 
 export default examApi;

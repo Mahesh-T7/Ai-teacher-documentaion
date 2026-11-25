@@ -148,8 +148,10 @@ export const ImportStudentsModal = ({
       finalStudents = studentRowsWithStatus.map((s, idx) => {
         // If matched an existing student, PRESERVE their existing marks and calculations!
         const existingMarks = s.existingData?.componentMarks || {};
+        const roll = s.rollNumber || idx + 1;
         return {
-          rollNumber: s.rollNumber || idx + 1,
+          studentId: s.existingData?.studentId || `stu_${section}_${roll}_${idx}`,
+          rollNumber: roll,
           studentName: s.studentName,
           admissionNumber: s.admissionNumber || '',
           gender: s.gender || 'M',
@@ -177,8 +179,10 @@ export const ImportStudentsModal = ({
         );
 
         if (!isDuplicate) {
+          const newRoll = highestRoll + idx + 1;
           currentCopy.push({
-            rollNumber: highestRoll + idx + 1,
+            studentId: `stu_${section}_${newRoll}_${Date.now()}_${idx}`,
+            rollNumber: newRoll,
             studentName: s.studentName,
             admissionNumber: s.admissionNumber || '',
             gender: s.gender || 'M',
@@ -203,11 +207,6 @@ export const ImportStudentsModal = ({
       mode: importMode,
       sheetName: selectedSheet,
     });
-
-    showToast(
-      `Populated student register with ${finalStudents.length} student(s) from Excel (${className} - Sec ${section})!`,
-      'success'
-    );
     onClose();
   };
 

@@ -22,10 +22,12 @@ import {
   exportStudentReportCardPdf,
   exportBulkReportCardsPdf,
   exportNsqfExcelFormat,
+  exportNormalMarksExcel,
   downloadExcelFormatTemplate,
   importExcelMarks,
   uploadExcelMiddleware,
   importStudentsFromExcel,
+  syncImportedStudents,
   previewClassRegisterPdf,
 } from '../controllers/examRecordController.js';
 
@@ -71,6 +73,7 @@ router.get('/records/:id/export/pdf', exportClassRegisterPdf);
 router.post('/preview-register-pdf', previewClassRegisterPdf);
 router.get('/records/:id/export/excel', exportClassRegisterExcel);
 router.get('/records/:id/export/nsqf-excel', exportNsqfExcelFormat);
+router.get('/records/:id/export/normal-excel', exportNormalMarksExcel);
 router.get('/records/:id/students/:studentId/report-card', exportStudentReportCardPdf);
 router.get('/records/:id/export/bulk-report-cards', exportBulkReportCardsPdf);
 
@@ -80,5 +83,6 @@ router.get('/records/:id/export/bulk-report-cards', exportBulkReportCardsPdf);
 router.get('/template-excel', downloadExcelFormatTemplate);
 router.post('/import-excel', uploadExcelMiddleware.single('file'), importExcelMarks);
 router.post('/import-students-excel', uploadExcelMiddleware.single('file'), importStudentsFromExcel);
+router.post('/sync-students', syncImportedStudents);
 
 export default router;

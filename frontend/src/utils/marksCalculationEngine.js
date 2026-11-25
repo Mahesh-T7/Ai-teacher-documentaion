@@ -395,6 +395,7 @@ export function calculateStudentMarksResult(studentEntry, template) {
   const totalExamFinalMarks = template.totalFinalMarks || 100;
 
   const rawMarksMap = {};
+  const rawDisplayMap = {};
   const statusMap = {};
   const remarksMap = {};
 
@@ -404,7 +405,9 @@ export function calculateStudentMarksResult(studentEntry, template) {
 
     if (typeof itemData === 'object' && itemData !== null) {
       const rawVal = itemData.rawMarks !== undefined ? itemData.rawMarks : itemData.raw;
-      rawMarksMap[code] = rawVal !== undefined && rawVal !== null && rawVal !== '' ? parseFloat(rawVal) || 0 : 0;
+      const isBlank = rawVal === undefined || rawVal === null || String(rawVal).trim() === '';
+      rawMarksMap[code] = !isBlank ? parseFloat(rawVal) || 0 : 0;
+      rawDisplayMap[code] = isBlank ? '' : (Number.isFinite(parseFloat(rawVal)) ? parseFloat(rawVal) : '');
       if (itemData.isAbsent || itemData.status === 'ABSENT') {
         statusMap[code] = 'ABSENT';
       } else if (itemData.isExempted || itemData.status === 'EXEMPTED') {
@@ -414,7 +417,9 @@ export function calculateStudentMarksResult(studentEntry, template) {
       }
       remarksMap[code] = itemData.remarks || '';
     } else {
-      rawMarksMap[code] = parseFloat(itemData) || 0;
+      const isBlank = itemData === undefined || itemData === null || String(itemData).trim() === '';
+      rawMarksMap[code] = !isBlank ? parseFloat(itemData) || 0 : 0;
+      rawDisplayMap[code] = isBlank ? '' : (Number.isFinite(parseFloat(itemData)) ? parseFloat(itemData) : '');
       statusMap[code] = 'PRESENT';
       remarksMap[code] = '';
     }
@@ -516,6 +521,9 @@ export function calculateStudentMarksResult(studentEntry, template) {
   const computedComponentDetails = {};
   components.forEach((comp) => {
     const code = comp.code.trim().toUpperCase();
+    const hasFormulaDeps = ['sum', 'average', 'best_of', 'formula'].includes(comp.calculationMethod || 'direct') ||
+      ((comp.calculationMethod === 'proportional' || comp.calculationMethod === 'weighted_percentage') && (comp.dependencies || []).length > 0);
+    const preservedRaw = hasFormulaDeps ? (rawMarksMap[code] || 0) : (rawDisplayMap[code] !== undefined ? rawDisplayMap[code] : '');
     computedComponentDetails[code] = {
       code,
       name: comp.name,
@@ -523,8 +531,8 @@ export function calculateStudentMarksResult(studentEntry, template) {
       maxRawMarks: comp.maxRawMarks ?? comp.maxRaw,
       finalWeightage: comp.finalWeightage ?? comp.finalMarks,
       finalMarks: finalMarksMap[code] || 0,
-      raw: rawMarksMap[code] || 0,
-      rawMarks: rawMarksMap[code] || 0,
+      raw: preservedRaw,
+      rawMarks: preservedRaw,
       final: finalMarksMap[code] || 0,
       isAbsent: statusMap[code] === 'ABSENT',
       isExempted: statusMap[code] === 'EXEMPTED',

@@ -6,6 +6,7 @@ import {
   FolderArchive,
   FileText,
   FileSpreadsheet,
+  ClipboardList,
   Calendar,
   Clock,
   CheckCircle2,
@@ -184,7 +185,7 @@ export const Dashboard = () => {
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <button
             onClick={() => navigate('/create-record')}
             className="flex items-center gap-3 p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100/70 text-blue-900 text-left transition cursor-pointer group"
@@ -206,8 +207,21 @@ export const Dashboard = () => {
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-semibold text-xs text-amber-950">Marks Entry</p>
-              <p className="text-[11px] text-amber-700">Excel format entry & calculations</p>
+              <p className="font-semibold text-xs text-amber-950">Marks Entry (AI/NSQF)</p>
+              <p className="text-[11px] text-amber-700">Excel format entry &amp; calculations</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/normal-marks-entry')}
+            className="flex items-center gap-3 p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-slate-800 text-left transition cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-xs text-indigo-950">Normal Marks Entry</p>
+              <p className="text-[11px] text-indigo-700">FA1, FA2, SA1 &amp; FA3, FA4, SA2</p>
             </div>
           </button>
 

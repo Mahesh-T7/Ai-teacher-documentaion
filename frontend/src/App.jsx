@@ -14,6 +14,7 @@ import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { MarksEntrySpreadsheetPage } from './pages/exams/MarksEntrySpreadsheetPage';
 import { MarksEntryPage } from './pages/marksEntry/MarksEntryPage';
+import { NormalMarksEntryPage } from './pages/marksEntry/NormalMarksEntryPage';
 
 // Additional & Legacy Modules (Maintained for full backwards compatibility)
 import { TeacherProfile } from './pages/profile/TeacherProfile';
@@ -55,6 +56,8 @@ export const App = () => {
         <Route path="exams/entry/:id" element={<MarksEntrySpreadsheetPage />} />
         <Route path="marks-entry" element={<MarksEntryPage />} />
         <Route path="marks-entry/:id" element={<MarksEntryPage />} />
+        <Route path="normal-marks-entry" element={<NormalMarksEntryPage />} />
+        <Route path="normal-marks-entry/:id" element={<NormalMarksEntryPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />

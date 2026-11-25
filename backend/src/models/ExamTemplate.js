@@ -282,6 +282,41 @@ export const DEFAULT_EXAM_PRESETS = [
       ],
     },
   },
+  {
+    _id: 'preset_normal_fa_sa_annual',
+    templateName: 'Normal Marks Entry (FA1, FA2, SA1 & FA3, FA4, SA2)',
+    academicYear: '2026-2027',
+    className: 'Class 9',
+    subject: 'Mathematics',
+    totalFinalMarks: 400,
+    description: 'Standard School Normal Marks Entry covering Term 1 (FA1, FA2, SA1) and Term 2 (FA3, FA4, SA2) with automatic totals, percentage, and grades.',
+    version: 1,
+    isPreset: true,
+    components: [
+      { code: 'FA1', name: 'FA 1', maxRaw: 50, finalMarks: 50, calculationMethod: 'direct', includeInTotal: false, order: 1 },
+      { code: 'FA2', name: 'FA 2', maxRaw: 50, finalMarks: 50, calculationMethod: 'direct', includeInTotal: false, order: 2 },
+      { code: 'SA1', name: 'SA 1', maxRaw: 100, finalMarks: 100, calculationMethod: 'direct', includeInTotal: false, order: 3 },
+      { code: 'TERM1_TOTAL', name: 'Term 1 Total', maxRaw: 200, finalMarks: 200, calculationMethod: 'sum', dependencies: ['FA1', 'FA2', 'SA1'], includeInTotal: true, order: 4 },
+      { code: 'FA3', name: 'FA 3', maxRaw: 50, finalMarks: 50, calculationMethod: 'direct', includeInTotal: false, order: 5 },
+      { code: 'FA4', name: 'FA 4', maxRaw: 50, finalMarks: 50, calculationMethod: 'direct', includeInTotal: false, order: 6 },
+      { code: 'SA2', name: 'SA 2', maxRaw: 100, finalMarks: 100, calculationMethod: 'direct', includeInTotal: false, order: 7 },
+      { code: 'TERM2_TOTAL', name: 'Term 2 Total', maxRaw: 200, finalMarks: 200, calculationMethod: 'sum', dependencies: ['FA3', 'FA4', 'SA2'], includeInTotal: true, order: 8 },
+    ],
+    gradingRules: {
+      minPassPercentage: 35,
+      distinctionPercentage: 75,
+      roundingRule: 'round',
+      gradeBoundaries: [
+        { grade: 'A+', minPercentage: 90 },
+        { grade: 'A', minPercentage: 80 },
+        { grade: 'B+', minPercentage: 70 },
+        { grade: 'B', minPercentage: 60 },
+        { grade: 'C+', minPercentage: 50 },
+        { grade: 'C', minPercentage: 35 },
+        { grade: 'NA', minPercentage: 0 },
+      ],
+    },
+  },
 ];
 
 const memoryTemplates = [...DEFAULT_EXAM_PRESETS];

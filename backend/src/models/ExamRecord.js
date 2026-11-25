@@ -149,7 +149,7 @@ export class ExamRecord {
       ],
     };
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(payload.teacherId)) {
       try {
         return await MongoExamRecord.create(payload);
       } catch (err) {
@@ -189,8 +189,10 @@ export class ExamRecord {
     if (filters.subject) query.subject = filters.subject;
     if (filters.status) query.status = filters.status;
     if (filters.academicYear) query.academicYear = filters.academicYear;
+    if (filters.templateId) query.templateId = filters.templateId;
+    else if (filters.excludeTemplateId) query.templateId = { $ne: filters.excludeTemplateId };
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         return await MongoExamRecord.find(query).sort({ updatedAt: -1, createdAt: -1 });
       } catch (err) {
@@ -206,6 +208,8 @@ export class ExamRecord {
         if (filters.subject && r.subject !== filters.subject) return false;
         if (filters.status && r.status !== filters.status) return false;
         if (filters.academicYear && r.academicYear !== filters.academicYear) return false;
+        if (filters.templateId && String(r.templateId) !== String(filters.templateId)) return false;
+        if (filters.excludeTemplateId && String(r.templateId) === String(filters.excludeTemplateId)) return false;
         return true;
       })
       .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
@@ -254,7 +258,7 @@ export class ExamRecord {
       payload.finalizedBy = userEmail || 'Teacher';
     }
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id) && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         return await MongoExamRecord.findOneAndUpdate(
           { _id: id, teacherId },
@@ -294,7 +298,7 @@ export class ExamRecord {
     }
 
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id) && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         const res = await MongoExamRecord.findOneAndDelete({ _id: id, teacherId });
         return !!res;

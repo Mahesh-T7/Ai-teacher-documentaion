@@ -12,10 +12,10 @@ const axiosClient = axios.create({
   timeout: 10000,
 });
 
-// Request interceptor: Attach JWT token if present in localStorage
+// Request interceptor: Attach JWT token if present in localStorage or sessionStorage
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('teacher_token');
+    const token = localStorage.getItem('teacher_token') || sessionStorage.getItem('teacher_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -48,10 +48,12 @@ axiosClient.interceptors.response.use(
       message = error.message;
     }
 
-    // Auto logout on 401 if token was expired
+    // Auto logout on 401 if token was expired/invalid
     if (res && res.status === 401) {
       localStorage.removeItem('teacher_token');
       localStorage.removeItem('teacher_user');
+      sessionStorage.removeItem('teacher_token');
+      sessionStorage.removeItem('teacher_user');
       const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
       const loginUrl = `${basePath}/login?expired=1`;
       if (!window.location.pathname.endsWith('/login') && !window.location.pathname.endsWith('/register')) {
@@ -59,7 +61,9 @@ axiosClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(message));
+    const wrappedErr = new Error(message);
+    wrappedErr.status = res?.status;
+    return Promise.reject(wrappedErr);
   }
 );
 

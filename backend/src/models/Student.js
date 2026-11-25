@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import { getDBStatus } from '../config/db.js';
+import { loadCollection, saveCollection } from '../utils/localDiskStore.js';
 
-const memoryStudents = [];
+const memoryStudents = loadCollection('students', []);
+const persistStudents = () => saveCollection('students', memoryStudents);
 
 const studentSchema = new mongoose.Schema(
   {
@@ -22,7 +24,7 @@ const studentSchema = new mongoose.Schema(
     },
     admissionNumber: {
       type: String,
-      required: [true, 'Admission number is required'],
+      default: '',
       trim: true,
     },
     className: {
@@ -44,6 +46,16 @@ const studentSchema = new mongoose.Schema(
     rollNumber: {
       type: Number,
       required: [true, 'Roll number is required'],
+    },
+    gender: {
+      type: String,
+      default: 'M',
+      trim: true,
+    },
+    caste: {
+      type: String,
+      default: 'GEN',
+      trim: true,
     },
     contactNumber: {
       type: String,
@@ -74,15 +86,16 @@ export class Student {
     const { isConnected } = getDBStatus();
     const payload = {
       ...data,
+      admissionNumber: data.admissionNumber || '',
       classHandled: data.classHandled || (data.section ? `${data.className}-${data.section}` : data.className),
     };
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(payload.teacherId)) {
       try {
         return await MongoStudent.create(payload);
       } catch (err) {
         console.warn('[DB Error] Student.create fallback:', err.message);
-        throw err;
+        if (err.code === 11000) throw err;
       }
     }
 
@@ -93,12 +106,13 @@ export class Student {
       updatedAt: new Date(),
     };
     memoryStudents.push(item);
+    persistStudents();
     return item;
   }
 
   static async findForClass(teacherId, className, section = 'A') {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         return await MongoStudent.find({ teacherId, className, section }).sort({ rollNumber: 1 });
       } catch (err) {
@@ -117,7 +131,7 @@ export class Student {
     if (filters.section) query.section = filters.section;
     if (filters.classHandled) query.classHandled = filters.classHandled;
 
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         return await MongoStudent.find(query).sort({ className: 1, section: 1, rollNumber: 1 });
       } catch (err) {
@@ -138,7 +152,7 @@ export class Student {
 
   static async findById(id) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id)) {
       try {
         return await MongoStudent.findById(id);
       } catch (err) {
@@ -150,12 +164,12 @@ export class Student {
 
   static async updateById(id, teacherId, updateData) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id) && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         return await MongoStudent.findOneAndUpdate(
           { _id: id, teacherId },
           { ...updateData, updatedAt: new Date() },
-          { new: true }
+          { returnDocument: 'after' }
         );
       } catch (err) {
         console.warn('[DB Error] Student.updateById fallback:', err.message);
@@ -168,12 +182,13 @@ export class Student {
     if (idx === -1) return null;
     const merged = { ...memoryStudents[idx], ...updateData, updatedAt: new Date() };
     memoryStudents[idx] = merged;
+    persistStudents();
     return merged;
   }
 
   static async deleteById(id, teacherId) {
     const { isConnected } = getDBStatus();
-    if (isConnected) {
+    if (isConnected && mongoose.Types.ObjectId.isValid(id) && mongoose.Types.ObjectId.isValid(teacherId)) {
       try {
         const res = await MongoStudent.findOneAndDelete({ _id: id, teacherId });
         return !!res;
@@ -186,6 +201,7 @@ export class Student {
     );
     if (idx === -1) return false;
     memoryStudents.splice(idx, 1);
+    persistStudents();
     return true;
   }
 
@@ -196,6 +212,115 @@ export class Student {
       results.push(created);
     }
     return results;
+  }
+
+  /**
+   * Sync an imported class roster cleanly for (teacherId, className, section).
+   * mode='replace' replaces existing class students; mode='append' adds new ones.
+   */
+  static async syncClassRoster(teacherId, className, section = 'A', studentsList = [], mode = 'replace', schoolId = '') {
+    const { isConnected } = getDBStatus();
+    const normalizedSection = section || 'A';
+    const usedRolls = new Set();
+
+    const sanitized = (studentsList || [])
+      .filter((s) => s && String(s.studentName || '').trim())
+      .map((s, idx) => {
+        let roll = parseInt(s.rollNumber, 10);
+        if (isNaN(roll) || roll <= 0 || usedRolls.has(roll)) {
+          roll = idx + 1;
+          while (usedRolls.has(roll)) roll++;
+        }
+        usedRolls.add(roll);
+        return {
+          teacherId,
+          schoolId,
+          studentName: String(s.studentName).trim(),
+          admissionNumber: String(s.admissionNumber || '').trim(),
+          className,
+          section: normalizedSection,
+          classHandled: `${className}-${normalizedSection}`,
+          rollNumber: roll,
+          gender: s.gender || 'M',
+          caste: s.caste || 'GEN',
+          contactNumber: s.contactNumber || '',
+          parentName: s.fatherName || s.parentName || '',
+        };
+      });
+
+    if (isConnected && mongoose.Types.ObjectId.isValid(teacherId)) {
+      try {
+        if (mode === 'replace') {
+          await MongoStudent.deleteMany({ teacherId, className, section: normalizedSection });
+          if (sanitized.length === 0) return [];
+          return await MongoStudent.insertMany(sanitized, { ordered: false });
+        } else {
+          const existing = await MongoStudent.find({ teacherId, className, section: normalizedSection });
+          const existingRolls = new Set(existing.map((e) => Number(e.rollNumber)));
+          let maxRoll = existing.reduce((m, e) => Math.max(m, Number(e.rollNumber) || 0), 0);
+          const toInsert = sanitized.map((s) => {
+            if (existingRolls.has(s.rollNumber)) {
+              maxRoll += 1;
+              return { ...s, rollNumber: maxRoll };
+            }
+            existingRolls.add(s.rollNumber);
+            return s;
+          });
+          if (toInsert.length > 0) {
+            await MongoStudent.insertMany(toInsert, { ordered: false });
+          }
+          return await MongoStudent.find({ teacherId, className, section: normalizedSection }).sort({ rollNumber: 1 });
+        }
+      } catch (err) {
+        console.warn('[DB Error] Student.syncClassRoster fallback:', err.message);
+      }
+    }
+
+    if (mode === 'replace') {
+      for (let i = memoryStudents.length - 1; i >= 0; i--) {
+        if (
+          String(memoryStudents[i].teacherId) === String(teacherId) &&
+          memoryStudents[i].className === className &&
+          memoryStudents[i].section === normalizedSection
+        ) {
+          memoryStudents.splice(i, 1);
+        }
+      }
+      const created = sanitized.map((item, idx) => ({
+        _id: `stu_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+        ...item,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+      memoryStudents.push(...created);
+      persistStudents();
+      return created;
+    } else {
+      const existing = memoryStudents.filter(
+        (s) => String(s.teacherId) === String(teacherId) && s.className === className && s.section === normalizedSection
+      );
+      const existingRolls = new Set(existing.map((e) => Number(e.rollNumber)));
+      let maxRoll = existing.reduce((m, e) => Math.max(m, Number(e.rollNumber) || 0), 0);
+      sanitized.forEach((s, idx) => {
+        let roll = s.rollNumber;
+        if (existingRolls.has(roll)) {
+          maxRoll += 1;
+          roll = maxRoll;
+        }
+        existingRolls.add(roll);
+        memoryStudents.push({
+          _id: `stu_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+          ...s,
+          rollNumber: roll,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+      persistStudents();
+      return memoryStudents
+        .filter((s) => String(s.teacherId) === String(teacherId) && s.className === className && s.section === normalizedSection)
+        .sort((a, b) => a.rollNumber - b.rollNumber);
+    }
   }
 }
 

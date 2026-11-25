@@ -10,6 +10,7 @@ import {
   generateClassRegisterExcel,
   generateBulkReportCardsPdf,
   generateAiNsqfExcelWorkbook,
+  generateNormalMarksExcelWorkbook,
 } from '../services/examReportService.js';
 import { calculateStudentMarksResult, calculateExamStatistics } from '../utils/marksCalculationEngine.js';
 
@@ -26,7 +27,7 @@ const sanitizeFileName = (str) => (str || 'Exam').replace(/[^a-zA-Z0-9_\-]/g, '_
 export const getExamRecords = async (req, res, next) => {
   try {
     const teacherId = req.user._id || req.user.id;
-    const { className, section, subject, status, academicYear } = req.query;
+    const { className, section, subject, status, academicYear, templateId, excludeTemplateId } = req.query;
 
     const records = await ExamRecord.findForTeacher(teacherId, {
       className,
@@ -34,6 +35,8 @@ export const getExamRecords = async (req, res, next) => {
       subject,
       status,
       academicYear,
+      templateId,
+      excludeTemplateId,
     });
 
     res.status(200).json({
@@ -80,6 +83,7 @@ export const createExamRecord = async (req, res, next) => {
       subject,
       examDate = new Date(),
       initialStudents,
+      customTemplateSnapshot,
     } = req.body;
 
     if (!templateId) {
@@ -98,7 +102,9 @@ export const createExamRecord = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Selected examination template not found.' });
     }
 
-    const templateSnapshot = template.toObject ? template.toObject() : JSON.parse(JSON.stringify(template));
+    const templateSnapshot = customTemplateSnapshot
+      ? JSON.parse(JSON.stringify(customTemplateSnapshot))
+      : (template.toObject ? template.toObject() : JSON.parse(JSON.stringify(template)));
 
     // Determine students list
     let students = [];
@@ -422,7 +428,7 @@ export const exportNsqfExcelFormat = async (req, res, next) => {
     }
 
     const teacherInfo = {
-      name: req.user.name || 'Subject Teacher',
+      name: req.user.fullName || req.user.name || 'Subject Teacher',
       schoolName: req.user.schoolName || 'Government / Model Secondary School',
       designation: req.user.designation || 'Vocational Trainer / TGT',
     };
@@ -435,6 +441,70 @@ export const exportNsqfExcelFormat = async (req, res, next) => {
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.setHeader('Content-Length', finalBuffer.length);
     res.end(finalBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Export Normal Marks Entry Excel Workbook (FA1, FA2, SA1, FA3, FA4, SA2)
+// @route   GET /api/exams/records/:id/export/normal-excel
+// @access  Private (Teacher)
+export const exportNormalMarksExcel = async (req, res, next) => {
+  try {
+    const record = await ExamRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Examination record not found.' });
+    }
+
+    const teacherInfo = {
+      name: req.user.fullName || req.user.name || 'Subject Teacher',
+      schoolName: req.user.schoolName || 'Government / Model Secondary School',
+      designation: req.user.designation || 'Subject Teacher',
+    };
+
+    const excelBuffer = await generateNormalMarksExcelWorkbook({ examRecord: record, teacherInfo });
+    const fileName = `Normal_Marks_${sanitizeFileName(record.subject)}_${sanitizeFileName(record.className)}_${record.section || 'A'}.xlsx`;
+    const finalBuffer = Buffer.isBuffer(excelBuffer) ? excelBuffer : Buffer.from(excelBuffer);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', finalBuffer.length);
+    res.end(finalBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Persist imported students into the teacher's Class Student Roster
+// @route   POST /api/exams/sync-students
+// @access  Private (Teacher)
+export const syncImportedStudents = async (req, res, next) => {
+  try {
+    const teacherId = req.user._id || req.user.id;
+    const { className, section = 'A', students = [], mode = 'replace' } = req.body;
+
+    if (!className || !Array.isArray(students)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Class name and students array are required.',
+      });
+    }
+
+    const savedStudents = await Student.syncClassRoster(
+      teacherId,
+      className,
+      section,
+      students,
+      mode,
+      req.user.schoolName || ''
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Saved ${savedStudents.length} student(s) to ${className} Section ${section}.`,
+      count: savedStudents.length,
+      students: savedStudents,
+    });
   } catch (error) {
     next(error);
   }

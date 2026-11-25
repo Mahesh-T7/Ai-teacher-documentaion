@@ -22,6 +22,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { examApi } from '../../api/examApi';
+import { attendanceApi } from '../../api/attendanceApi';
 import { useToast } from '../../context/ToastContext';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Badge } from '../../components/common/Badge';
@@ -110,8 +111,8 @@ export const MarksEntryPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [importedSectionsData, setImportedSectionsData] = useState(null);
 
-  // Guard against loadExamRecord overwriting freshly imported Excel data
-  const isImportingRef = useRef(false);
+  // Guard against loadExamRecord overwriting freshly imported Excel data for a specific key
+  const skipLoadKeyRef = useRef(null);
 
   // Modals & Export States
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -141,8 +142,9 @@ export const MarksEntryPage = () => {
 
   // 2. Load or initialize record when class/section/term changes
   const loadExamRecord = useCallback(async () => {
-    if (isImportingRef.current) {
-      isImportingRef.current = false;
+    const currentKey = `${academicYear}__${className}__${section}__${subject}`;
+    if (skipLoadKeyRef.current === currentKey) {
+      skipLoadKeyRef.current = null;
       return;
     }
     try {
@@ -152,6 +154,7 @@ export const MarksEntryPage = () => {
         section,
         subject,
         academicYear,
+        excludeTemplateId: 'preset_normal_fa_sa_annual',
       });
 
       const records = Array.isArray(res?.data)
@@ -173,7 +176,30 @@ export const MarksEntryPage = () => {
         }
       } else {
         setExistingRecord(null);
-        setStudents(generateDefaultStudents(40, section));
+        // Check if teacher has already imported/saved students for this Class & Section
+        try {
+          const stuRes = await attendanceApi.getStudents({ className, section });
+          const roster = stuRes?.students || stuRes?.data || [];
+          if (Array.isArray(roster) && roster.length > 0) {
+            setStudents(
+              roster.map((s, idx) =>
+                computeStudentRow({
+                  studentId: s._id || s.id || `stu_${section}_${s.rollNumber || idx + 1}`,
+                  rollNumber: s.rollNumber || idx + 1,
+                  studentName: s.studentName,
+                  gender: s.gender || 'M',
+                  caste: s.caste || 'GEN',
+                  admissionNumber: s.admissionNumber || '',
+                  componentMarks: {},
+                })
+              )
+            );
+          } else {
+            setStudents(generateDefaultStudents(40, section));
+          }
+        } catch {
+          setStudents(generateDefaultStudents(40, section));
+        }
       }
       setIsDirty(false);
     } catch (err) {
@@ -468,10 +494,71 @@ export const MarksEntryPage = () => {
     setIsDirty(true);
   };
 
+  // Persist students & exam record helper (used by both Save Draft and Auto-Save on Import)
+  const persistStudentsAndRecord = async (
+    targetStudents,
+    { targetClass = className, targetSection = section, targetRecord = existingRecord, syncMode = 'replace' } = {}
+  ) => {
+    const computedStudents = targetStudents.map(computeStudentRow);
+
+    // 1. Sync student roster to Class Student Store so roster persists across subjects & modules
+    try {
+      await examApi.syncStudents({
+        className: targetClass,
+        section: targetSection,
+        students: computedStudents,
+        mode: syncMode,
+      });
+    } catch (syncErr) {
+      console.warn('Student roster sync warning:', syncErr);
+    }
+
+    // 2. Save or update ExamRecord for this (class, section, subject, academicYear)
+    let recordToUpdate = targetRecord;
+    if (!recordToUpdate?._id) {
+      const lookupRes = await examApi.getExamRecords({
+        className: targetClass,
+        section: targetSection,
+        subject,
+        academicYear,
+        excludeTemplateId: 'preset_normal_fa_sa_annual',
+      });
+      const foundList = Array.isArray(lookupRes?.data)
+        ? lookupRes.data
+        : (Array.isArray(lookupRes) ? lookupRes : []);
+      if (foundList.length > 0) {
+        recordToUpdate = foundList[0];
+      }
+    }
+
+    let saved;
+    if (recordToUpdate && recordToUpdate._id && recordToUpdate.status !== 'Finalized') {
+      const updateRes = await examApi.updateExamRecord(recordToUpdate._id, {
+        studentMarks: computedStudents,
+      });
+      saved = updateRes?.data?.data || updateRes?.data || updateRes;
+    } else if (!recordToUpdate?._id) {
+      const res = await examApi.createExamRecord({
+        templateId: selectedTemplateId,
+        examTitle: `${subject} - ${targetClass} ${targetSection} (AI/NSQF Official Sheet)`,
+        academicYear,
+        className: targetClass,
+        section: targetSection,
+        subject,
+        initialStudents: computedStudents,
+      });
+      saved = res?.data?.data || res?.data || res;
+    } else {
+      saved = recordToUpdate;
+    }
+
+    return saved;
+  };
+
   // Handle Section Change with Multi-Section Excel auto-switch
   const handleSectionChange = (newSec) => {
     if (importedSectionsData && importedSectionsData[newSec]?.students?.length > 0) {
-      isImportingRef.current = true;
+      skipLoadKeyRef.current = `${academicYear}__${className}__${newSec}__${subject}`;
       setSection(newSec);
       setStudents(importedSectionsData[newSec].students.map(computeStudentRow));
       setIsDirty(true);
@@ -484,39 +571,103 @@ export const MarksEntryPage = () => {
     }
   };
 
-  // Handle Universal Excel Import Result
-  const handleImportSuccess = ({
+  // Handle Universal Excel Import Result (auto-saves immediately to database)
+  const handleImportSuccess = async ({
     students: importedStudents,
     className: importedClass,
     section: importedSection,
     allSections,
     sheetName,
   }) => {
-    isImportingRef.current = true;
+    const targetClass = importedClass || className;
+    const targetSection = importedSection || section;
+    if (targetClass !== className || targetSection !== section) {
+      skipLoadKeyRef.current = `${academicYear}__${targetClass}__${targetSection}__${subject}`;
+    }
     if (importedClass) setClassName(importedClass);
     if (importedSection) setSection(importedSection);
     if (allSections) setImportedSectionsData(allSections);
 
-    if (importedStudents && importedStudents.length > 0) {
-      setStudents(importedStudents.map(computeStudentRow));
+    const computedImported = (importedStudents || []).map(computeStudentRow);
+    if (computedImported.length > 0) {
+      setStudents(computedImported);
     }
-    setIsDirty(true);
-    showToast(
-      `Auto-filled ${importedClass || className} – Section ${importedSection || section} with ${importedStudents?.length || 0} student(s) from "${sheetName}"! Totals, IA 20%, and grades calculated automatically.`,
-      'success'
-    );
-  };
 
-  // Import Students from Excel handler (exact count roster population)
-  const handleImportStudentsSuccess = ({ students: importedRoster, importedCount, mode, sheetName }) => {
-    isImportingRef.current = true;
-    if (importedRoster && importedRoster.length > 0) {
-      setStudents(importedRoster.map(computeStudentRow));
-      setIsDirty(true);
+    try {
+      setSaving(true);
+      const targetRec = targetClass === className && targetSection === section ? existingRecord : null;
+      const saved = await persistStudentsAndRecord(computedImported, {
+        targetClass,
+        targetSection,
+        targetRecord: targetRec,
+        syncMode: 'replace',
+      });
+      setExistingRecord(saved);
+      if (saved?.studentMarks && saved.studentMarks.length > 0) {
+        setStudents(saved.studentMarks.map(computeStudentRow));
+      }
+      setIsDirty(false);
+
+      // Persist any additional sections from multi-section workbook
+      if (allSections) {
+        for (const [secKey, secData] of Object.entries(allSections)) {
+          if (secKey !== targetSection && secData?.students?.length > 0) {
+            await persistStudentsAndRecord(secData.students, {
+              targetClass: secData.className || targetClass,
+              targetSection: secKey,
+              targetRecord: null,
+              syncMode: 'replace',
+            });
+          }
+        }
+      }
+
       showToast(
-        `Populated student register with exactly ${importedRoster.length} students from "${sheetName}"!`,
+        `Imported & saved ${targetClass} – Section ${targetSection} (${computedImported.length} students) from "${sheetName}"!`,
         'success'
       );
+    } catch (err) {
+      setIsDirty(true);
+      showToast(
+        `Imported ${computedImported.length} students into grid, but save failed: ${err.message}`,
+        'warning'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Import Students from Excel handler (exact count roster population + auto-save)
+  const handleImportStudentsSuccess = async ({ students: importedRoster, mode, sheetName }) => {
+    if (!importedRoster || importedRoster.length === 0) return;
+    const computedRoster = importedRoster.map(computeStudentRow);
+    setStudents(computedRoster);
+
+    try {
+      setSaving(true);
+      const saved = await persistStudentsAndRecord(computedRoster, {
+        targetClass: className,
+        targetSection: section,
+        targetRecord: existingRecord,
+        syncMode: mode || 'replace',
+      });
+      setExistingRecord(saved);
+      if (saved?.studentMarks && saved.studentMarks.length > 0) {
+        setStudents(saved.studentMarks.map(computeStudentRow));
+      }
+      setIsDirty(false);
+      showToast(
+        `Imported & saved ${computedRoster.length} student(s) from "${sheetName}"!`,
+        'success'
+      );
+    } catch (err) {
+      setIsDirty(true);
+      showToast(
+        `Loaded ${computedRoster.length} students, but auto-save failed: ${err.message}. Click Save Draft to retry.`,
+        'warning'
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -524,35 +675,17 @@ export const MarksEntryPage = () => {
   const handleSaveDraft = async () => {
     try {
       setSaving(true);
-      const computedStudents = students.map(computeStudentRow);
-
-      if (existingRecord && existingRecord._id) {
-        const updateRes = await examApi.updateExamRecord(existingRecord._id, {
-          studentMarks: computedStudents,
-        });
-        const saved = updateRes?.data?.data || updateRes?.data || updateRes;
-        setExistingRecord(saved);
-        if (saved?.studentMarks && saved.studentMarks.length > 0) {
-          setStudents(saved.studentMarks.map(computeStudentRow));
-        }
-        showToast('Marks draft updated successfully!', 'success');
-      } else {
-        const res = await examApi.createExamRecord({
-          templateId: selectedTemplateId,
-          examTitle: `${subject} - ${className} ${section} (AI/NSQF Official Sheet)`,
-          academicYear,
-          className,
-          section,
-          subject,
-          initialStudents: computedStudents,
-        });
-        const saved = res?.data?.data || res?.data || res;
-        setExistingRecord(saved);
-        if (saved?.studentMarks && saved.studentMarks.length > 0) {
-          setStudents(saved.studentMarks.map(computeStudentRow));
-        }
-        showToast('Marks record initialized and saved!', 'success');
+      const saved = await persistStudentsAndRecord(students, {
+        targetClass: className,
+        targetSection: section,
+        targetRecord: existingRecord,
+        syncMode: 'replace',
+      });
+      setExistingRecord(saved);
+      if (saved?.studentMarks && saved.studentMarks.length > 0) {
+        setStudents(saved.studentMarks.map(computeStudentRow));
       }
+      showToast(existingRecord?._id ? 'Marks draft updated successfully!' : 'Marks record initialized and saved!', 'success');
       setIsDirty(false);
     } catch (err) {
       showToast(err.response?.data?.message || err.message || 'Failed to save marks draft.', 'error');
@@ -782,6 +915,15 @@ export const MarksEntryPage = () => {
 
           {/* Action Toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => navigate('/normal-marks-entry')}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 transition cursor-pointer"
+              title="Switch to Normal Marks Entry (FA1, FA2, SA1 & FA3, FA4, SA2)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              Normal Marks Entry (FA1–SA2)
+            </button>
+
             <button
               onClick={handleSaveDraft}
               disabled={saving || existingRecord?.status === 'Finalized'}

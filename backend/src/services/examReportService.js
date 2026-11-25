@@ -872,3 +872,178 @@ export async function generateAiNsqfExcelWorkbook({ examRecord, teacherInfo = {}
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+/**
+ * 6. Generate Normal Marks Entry Excel Workbook (.xlsx)
+ * Covers Term 1 (FA1, FA2, SA1) and Term 2 (FA3, FA4, SA2) + Annual Totals
+ */
+export async function generateNormalMarksExcelWorkbook({ examRecord, teacherInfo = {} }) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'AI Teacher Documentation Management Portal';
+  workbook.created = new Date();
+
+  const students = examRecord.studentMarks || [];
+  const className = examRecord.className || 'Class 9';
+  const section = examRecord.section || 'A';
+  const subject = examRecord.subject || 'Subject';
+  const sheetTitle = `${className} ${section}`.slice(0, 31).trim();
+
+  const sheet = workbook.addWorksheet(sheetTitle, {
+    views: [{ state: 'frozen', xSplit: 2, ySplit: 3 }],
+  });
+
+  const editableFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFACD' } };
+  const formulaFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  const headerDarkFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  const headerBlueFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+  const borderThin = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
+
+  const comps = examRecord.templateSnapshot?.components || [];
+  const getMax = (code, def) => {
+    const found = comps.find((c) => String(c.code).toUpperCase() === code);
+    return Number(found?.maxRaw ?? found?.maxRawMarks ?? def) || def;
+  };
+  const maxFa1 = getMax('FA1', 50);
+  const maxFa2 = getMax('FA2', 50);
+  const maxSa1 = getMax('SA1', 100);
+  const maxFa3 = getMax('FA3', 50);
+  const maxFa4 = getMax('FA4', 50);
+  const maxSa2 = getMax('SA2', 100);
+  const maxT1 = maxFa1 + maxFa2 + maxSa1;
+  const maxT2 = maxFa3 + maxFa4 + maxSa2;
+  const maxGrand = maxT1 + maxT2;
+
+  // Row 1: Group Headers
+  sheet.mergeCells('A1:C1');
+  sheet.getCell('A1').value = `${subject} — ${className} (${section})`;
+  sheet.mergeCells('D1:H1');
+  sheet.getCell('D1').value = 'Term 1 (FA1 + FA2 + SA1)';
+  sheet.mergeCells('I1:M1');
+  sheet.getCell('I1').value = 'Term 2 (FA3 + FA4 + SA2)';
+  sheet.mergeCells('N1:Q1');
+  sheet.getCell('N1').value = 'Annual Consolidated Result';
+
+  ['A1', 'D1', 'I1', 'N1'].forEach((id) => {
+    const c = sheet.getCell(id);
+    c.fill = headerDarkFill;
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // Row 2: Column Names
+  const r2 = sheet.addRow([
+    'Sl No',
+    'Student Name',
+    'Adm No',
+    `FA 1 (${maxFa1})`,
+    `FA 2 (${maxFa2})`,
+    `SA 1 (${maxSa1})`,
+    `Term 1 Total (${maxT1})`,
+    'T1 Grade',
+    `FA 3 (${maxFa3})`,
+    `FA 4 (${maxFa4})`,
+    `SA 2 (${maxSa2})`,
+    `Term 2 Total (${maxT2})`,
+    'T2 Grade',
+    `Grand Total (${maxGrand})`,
+    'Percentage (%)',
+    'Final Grade',
+    'Result',
+  ]);
+  r2.height = 24;
+  r2.eachCell((c) => {
+    c.fill = headerBlueFill;
+    c.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    c.border = borderThin;
+  });
+
+  const getGradePct = (pct) => {
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 70) return 'B+';
+    if (pct >= 60) return 'B';
+    if (pct >= 50) return 'C+';
+    if (pct >= 35) return 'C';
+    return 'NA';
+  };
+
+  students.forEach((stu, idx) => {
+    const cm = stu.componentMarks || {};
+    const readVal = (code) => {
+      const entry = cm[code] || {};
+      if (entry.isAbsent || entry.status === 'ABSENT') return 'AB';
+      if (entry.isExempted || entry.status === 'EXEMPTED') return 'EX';
+      const v = entry.rawMarks ?? entry.raw;
+      return v !== undefined && v !== null && v !== '' ? Number(v) : '';
+    };
+    const numVal = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+    const fa1 = readVal('FA1');
+    const fa2 = readVal('FA2');
+    const sa1 = readVal('SA1');
+    const t1Total = numVal(fa1) + numVal(fa2) + numVal(sa1);
+    const t1Grade = getGradePct(maxT1 > 0 ? (t1Total / maxT1) * 100 : 0);
+
+    const fa3 = readVal('FA3');
+    const fa4 = readVal('FA4');
+    const sa2 = readVal('SA2');
+    const t2Total = numVal(fa3) + numVal(fa4) + numVal(sa2);
+    const t2Grade = getGradePct(maxT2 > 0 ? (t2Total / maxT2) * 100 : 0);
+
+    const grandTotal = t1Total + t2Total;
+    const pct = maxGrand > 0 ? Math.round((grandTotal / maxGrand) * 1000) / 10 : 0;
+    const grade = getGradePct(pct);
+    const result = pct >= 35 ? 'PASS' : 'FAIL';
+
+    const row = sheet.addRow([
+      stu.rollNumber || idx + 1,
+      stu.studentName || `Student ${idx + 1}`,
+      stu.admissionNumber || '',
+      fa1,
+      fa2,
+      sa1,
+      t1Total,
+      t1Grade,
+      fa3,
+      fa4,
+      sa2,
+      t2Total,
+      t2Grade,
+      grandTotal,
+      `${pct}%`,
+      grade,
+      result,
+    ]);
+    row.height = 20;
+    row.eachCell({ includeEmpty: true }, (c, colNum) => {
+      c.border = borderThin;
+      c.font = { name: 'Calibri', size: 9 };
+      c.alignment = { vertical: 'middle', horizontal: colNum === 2 ? 'left' : 'center' };
+      if ([4, 5, 6, 9, 10, 11].includes(colNum)) {
+        c.fill = editableFill;
+        c.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF1E40AF' } };
+      } else {
+        c.fill = formulaFill;
+        if ([7, 12, 14].includes(colNum)) {
+          c.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+        }
+      }
+    });
+  });
+
+  sheet.columns.forEach((col, i) => {
+    if (i === 0) col.width = 8;
+    else if (i === 1) col.width = 28;
+    else if (i === 2) col.width = 14;
+    else col.width = 13;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}

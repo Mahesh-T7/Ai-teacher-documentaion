@@ -171,6 +171,18 @@ export async function generateClassMarksRegisterPdf({ examRecord, teacherInfo = 
               ? 'FA 1'
               : upperCode.startsWith('FA2') || upperCode.startsWith('FA_2')
               ? 'FA 2'
+              : upperCode.startsWith('FA3') || upperCode.startsWith('FA_3')
+              ? 'FA 3'
+              : upperCode.startsWith('FA4') || upperCode.startsWith('FA_4')
+              ? 'FA 4'
+              : upperCode.startsWith('SA1') || upperCode.startsWith('SA_1')
+              ? 'SA 1'
+              : upperCode.startsWith('SA2') || upperCode.startsWith('SA_2')
+              ? 'SA 2'
+              : upperCode.startsWith('TERM1')
+              ? 'Term 1'
+              : upperCode.startsWith('TERM2')
+              ? 'Term 2'
               : upperCode.startsWith('SA') || upperCode.startsWith('TH')
               ? 'Summative Assessment'
               : upperCode.includes('PR')
@@ -407,7 +419,7 @@ export async function generateClassMarksRegisterPdf({ examRecord, teacherInfo = 
 
         // Trailing Headers
         doc.fontSize(6.8);
-        doc.text(`TOTAL\n(100)`, curX, yTop + tier1H + 2.5, { width: colW_tot, align: 'center', lineGap: -1 });
+        doc.text(`TOTAL\n(${template.totalFinalMarks || 100})`, curX, yTop + tier1H + 2.5, { width: colW_tot, align: 'center', lineGap: -1 });
         doc.moveTo(curX + colW_tot, yTop + tier1H).lineTo(curX + colW_tot, yTop + totalHeaderH).stroke('#334155');
         curX += colW_tot;
 

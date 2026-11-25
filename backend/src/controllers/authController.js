@@ -2,9 +2,9 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 
 // Generate JWT token helper
-const generateToken = (userId, email) => {
+const generateToken = (userId, email, rememberMe = true) => {
   const secret = process.env.JWT_SECRET || 'super_secret_jwt_teacher_portal_key_2026_dev_secure';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  const expiresIn = rememberMe === false ? '1d' : (process.env.JWT_EXPIRES_IN || '30d');
   return jwt.sign({ id: userId, email }, secret, { expiresIn });
 };
 
@@ -79,7 +79,7 @@ export const register = async (req, res, next) => {
 // @access  Public
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = true } = req.body;
 
     // Find teacher by email
     const user = await User.findByEmailWithPassword(email);
@@ -101,7 +101,7 @@ export const login = async (req, res, next) => {
 
     const safeUser = user.toSafeObject ? user.toSafeObject() : user;
     const userId = safeUser._id || safeUser.id;
-    const token = generateToken(userId, safeUser.email);
+    const token = generateToken(userId, safeUser.email, rememberMe);
 
     res.status(200).json({
       success: true,
